@@ -225,6 +225,60 @@
     (var-set contract-paused (not (var-get contract-paused)))
     (ok (var-get contract-paused))))
 
+;; Advanced ML-based portfolio rebalancing with risk optimization
+;; This function uses machine learning predictions and risk assessment to automatically
+;; rebalance the portfolio across different yield strategies for optimal returns
+;; while maintaining risk tolerance levels specified by the protocol
+(define-public (ml-rebalance-portfolio (market-conditions (list 10 uint)) (risk-tolerance uint))
+  (begin
+    (asserts! (is-owner) err-owner-only)
+    (asserts! (not-paused) err-contract-paused)
+    (asserts! (var-get model-trained) err-model-not-trained)
+    (asserts! (<= risk-tolerance u100) err-invalid-strategy)
+    
+    (let ((total-portfolio-value (var-get total-funds))
+          (strategy-count (var-get strategy-counter)))
+      
+      (asserts! (> total-portfolio-value u0) err-insufficient-balance)
+      (asserts! (> strategy-count u0) err-invalid-strategy)
+      
+      ;; Generate predictions for all strategies
+      (let ((strategy-results (fold generate-strategy-prediction
+                                        (list u1 u2 u3 u4 u5)
+                                        {
+                                          market-conditions: market-conditions,
+                                          predictions: (list),
+                                          total-expected-yield: u0
+                                        })))
+        
+        ;; Calculate optimal allocations based on predictions and risk
+        (let ((optimal-allocations (fold calculate-optimal-allocation
+                                          (get predictions strategy-results)
+                                          {
+                                            total-funds: total-portfolio-value,
+                                            risk-tolerance: risk-tolerance,
+                                            allocations: (list),
+                                            remaining-funds: total-portfolio-value
+                                          })))
+          
+          ;; Execute rebalancing based on calculated allocations
+          (let ((rebalance-result (fold execute-rebalancing
+                                        (get allocations optimal-allocations)
+                                        {
+                                          total-rebalanced: u0,
+                                          strategies-updated: u0,
+                                          success: true
+                                        })))
+            
+            (if (get success rebalance-result)
+              (ok {
+                total-rebalanced: (get total-rebalanced rebalance-result),
+                strategies-updated: (get strategies-updated rebalance-result),
+                expected-yield-improvement: (/ (get total-expected-yield strategy-results) u100),
+                risk-score: (assess-portfolio-risk (get allocations optimal-allocations))
+              })
+              err-invalid-strategy)))))))
+
 ;; Helper function to generate predictions for each strategy
 (define-private (generate-strategy-prediction 
   (strategy-id uint) 
